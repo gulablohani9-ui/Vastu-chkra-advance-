@@ -15,9 +15,10 @@
         .btn-blue { background-color: #17a2b8; margin-top: 10px; padding: 15px; font-size: 18px;}
         canvas { border: 2px solid #333; background-color: white; max-width: 100%; border-radius: 5px; margin-top: 10px; }
         .cut-row { display: flex; justify-content: space-between; align-items: center; background: #eee; padding: 5px; margin-top: 5px; border-radius: 5px;}
-        .rot-container { display: flex; align-items: center; justify-content: center; gap: 10px; margin-top: 10px; }
+        .rot-container { display: flex; align-items: center; justify-content: center; gap: 10px; margin-top: 5px; }
         .rot-btn { width: 50px; background-color: #6c757d; font-size: 18px; padding: 10px; }
-        input[type=range] { width: 60%; margin: 0; }
+        input[type=range] { width: 100%; margin: 10px 0; }
+        .slider-label { font-size: 14px; font-weight: bold; color: #333; margin-top: 10px; display: block; text-align: left; }
     </style>
 </head>
 <body>
@@ -29,6 +30,10 @@
         <h3>1. प्लॉट की फोटो डालें (गैलरी से)</h3>
         <p style="font-size: 12px; color: gray;">(यह फोटो आपके डाले गए साइज़ के अनुसार सेट हो जाएगी)</p>
         <input type="file" id="galleryUpload" accept="image/*">
+        
+        <label class="slider-label">फोटो को ज़ूम (Zoom In/Out) करें:</label>
+        <input type="range" id="bgScale" min="0.5" max="3" step="0.05" value="1" oninput="drawPlot()">
+        
         <button class="btn-red" onclick="removeGalleryImage()" style="width: auto; padding: 8px 15px; font-size: 14px; margin-top: 5px;">फोटो हटाएं</button>
     </div>
 
@@ -67,17 +72,20 @@
     <div class="card" style="background-color: #e9ecef;">
         <h3>5. वास्तु चक्र सेटिंग्स</h3>
         
-        <label><b>फोल्डर अपलोड करें:</b></label>
+        <label class="slider-label">फोल्डर अपलोड करें:</label>
         <input type="file" id="chakraFolder" accept="image/*" multiple webkitdirectory>
         <p id="chakraCount" style="color: green; font-weight: bold;"></p>
         
-        <label><b>चक्र चुनें (देखने/घुमाने के लिए):</b></label>
+        <label class="slider-label">चक्र चुनें (देखने/घुमाने के लिए):</label>
         <select id="chakraSelector" onchange="changeChakra()"></select>
 
-        <label style="display:block; margin-top:15px;"><b>चुने हुए चक्र को घुमाएं:</b></label>
+        <label class="slider-label">चक्र को ज़ूम (Zoom) करें:</label>
+        <input type="range" id="chakraScale" min="0.3" max="3" step="0.05" value="1" oninput="updateChakraScale()">
+
+        <label class="slider-label">चक्र को घुमाएं (Rotation):</label>
         <div class="rot-container">
             <button class="rot-btn" onclick="adjustRotation(-1)">-1°</button>
-            <input type="range" id="manualRotate" min="-180" max="180" value="0" oninput="updateRotation()">
+            <input type="range" id="manualRotate" min="-180" max="180" value="0" oninput="updateRotation()" style="width: 50%;">
             <button class="rot-btn" onclick="adjustRotation(1)">+1°</button>
         </div>
         <p style="margin-top: 5px;">रोटेशन: <span id="rotValue" style="font-weight:bold; color:red;">0</span>°</p>
@@ -85,7 +93,7 @@
 
     <!-- Actions -->
     <button class="btn-green" onclick="drawPlot()">स्क्रीन अपडेट करें</button>
-    <button class="btn-blue" id="pdfBtn" onclick="generatePDF()">HD PDF बनाएं (Share/Save)</button>
+    <button class="btn-blue" id="pdfBtn" onclick="generatePDF()">HD PDF बनाएं (Downloads में)</button>
     <button class="btn-red" onclick="resetAll()" style="width: 90%;">पूरी ऐप Reset करें</button>
 
     <!-- Canvas -->
@@ -97,10 +105,9 @@
         let canvas = document.getElementById('appCanvas');
         let ctx = canvas.getContext('2d');
         let cutsArray = [];
-        let chakrasArray = []; // इमेजेज और उनका रोटेशन स्टोर करने के लिए
+        let chakrasArray = []; 
         let uploadedBgImage = null;
 
-        // 1. गैलरी फोटो अपलोड
         document.getElementById('galleryUpload').addEventListener('change', function(e) {
             let file = e.target.files[0];
             if (file) {
@@ -117,16 +124,16 @@
         function removeGalleryImage() {
             uploadedBgImage = null;
             document.getElementById('galleryUpload').value = "";
+            document.getElementById('bgScale').value = 1;
             drawPlot();
         }
 
-        // 2. फोल्डर अपलोड और ड्रॉपडाउन (Dropdown) लिस्ट बनाना
         document.getElementById('chakraFolder').addEventListener('change', function(e) {
             chakrasArray = [];
             document.getElementById('chakraSelector').innerHTML = '';
             
             let files = Array.from(e.target.files).filter(f => f.type.match('image.*'));
-            files.sort((a,b) => a.name.localeCompare(b.name)); // नाम के हिसाब से क्रम में लगाना
+            files.sort((a,b) => a.name.localeCompare(b.name)); 
             
             let loadedCount = 0;
             files.forEach((file, index) => {
@@ -134,15 +141,13 @@
                 reader.onload = function(event) {
                     let img = new Image();
                     img.onload = function() {
-                        // हर इमेज का अपना रोटेशन (rot) सेव होगा
-                        chakrasArray.push({ img: img, name: file.name, rot: 0 });
+                        chakrasArray.push({ img: img, name: file.name, rot: 0, scale: 1 });
                         loadedCount++;
                         document.getElementById('chakraCount').innerText = loadedCount + " इमेजेज लोड हो गईं!";
                         
-                        // ड्रॉपडाउन में नाम जोड़ना
                         let sel = document.getElementById('chakraSelector');
                         let opt = document.createElement('option');
-                        opt.value = chakrasArray.length - 1; // Array Index
+                        opt.value = chakrasArray.length - 1;
                         opt.text = file.name;
                         sel.appendChild(opt);
 
@@ -157,18 +162,16 @@
             });
         });
 
-        // 3. ड्रॉपडाउन से चक्र बदलना
         function changeChakra() {
             let idx = document.getElementById('chakraSelector').value;
             if(chakrasArray[idx]) {
-                let r = chakrasArray[idx].rot;
-                document.getElementById('manualRotate').value = r;
-                document.getElementById('rotValue').innerText = r;
+                document.getElementById('manualRotate').value = chakrasArray[idx].rot;
+                document.getElementById('rotValue').innerText = chakrasArray[idx].rot;
+                document.getElementById('chakraScale').value = chakrasArray[idx].scale || 1;
                 drawPlot();
             }
         }
 
-        // 4. स्लाइडर से चक्र घुमाना
         function updateRotation() {
             let idx = document.getElementById('chakraSelector').value;
             if(chakrasArray[idx]) {
@@ -179,7 +182,6 @@
             }
         }
 
-        // 5. बटनों (+1/-1) से चक्र घुमाना
         function adjustRotation(amount) {
             let idx = document.getElementById('chakraSelector').value;
             if(chakrasArray[idx]) {
@@ -193,12 +195,20 @@
             }
         }
 
+        function updateChakraScale() {
+            let idx = document.getElementById('chakraSelector').value;
+            if(chakrasArray[idx]) {
+                chakrasArray[idx].scale = parseFloat(document.getElementById('chakraScale').value);
+                drawPlot();
+            }
+        }
+
         function getAutoDegree() {
             if (window.DeviceOrientationEvent) {
                 window.addEventListener('deviceorientation', function(event) {
                     let alpha = event.alpha;
                     if(alpha !== null) { 
-                        document.getElementById('degree').value = Math.round(360 - alpha); 
+                        document.getElementById('degree').value = Math.round(alpha); 
                         drawPlot();
                     }
                 }, {once: true});
@@ -235,10 +245,12 @@
             document.getElementById('plotLength').value = '';
             document.getElementById('degree').value = '';
             document.getElementById('galleryUpload').value = '';
+            document.getElementById('bgScale').value = 1;
             document.getElementById('chakraFolder').value = '';
             document.getElementById('chakraCount').innerText = '';
             document.getElementById('chakraSelector').innerHTML = '';
             document.getElementById('manualRotate').value = '0';
+            document.getElementById('chakraScale').value = '1';
             document.getElementById('rotValue').innerText = '0';
         }
 
@@ -281,6 +293,9 @@
             let offsetY = (canvas.height - (L * scale)) / 2;
 
             let polygonPts = getPlotPolygon(W, L, cutsArray);
+            let centroid = getCentroid(polygonPts);
+            let cx = offsetX + centroid.x * scale;
+            let cy = offsetY + centroid.y * scale;
             
             ctx.beginPath();
             ctx.moveTo(offsetX + polygonPts[0].x * scale, offsetY + polygonPts[0].y * scale);
@@ -293,7 +308,13 @@
             ctx.clip(); 
 
             if (uploadedBgImage) {
+                let bgS = parseFloat(document.getElementById('bgScale').value) || 1;
+                ctx.save();
+                ctx.translate(cx, cy); 
+                ctx.scale(bgS, bgS);
+                ctx.translate(-cx, -cy);
                 ctx.drawImage(uploadedBgImage, offsetX, offsetY, W * scale, L * scale);
+                ctx.restore();
             } else {
                 ctx.fillStyle = "#f8f9fa";
                 ctx.fill();
@@ -304,11 +325,6 @@
             ctx.strokeStyle = "#333";
             ctx.stroke();
 
-            let centroid = getCentroid(polygonPts);
-            let cx = offsetX + centroid.x * scale;
-            let cy = offsetY + centroid.y * scale;
-
-            // अगर PDF लूप चल रहा है, तो specificChakraObj आएगा, वरना ड्रॉपडाउन वाला चक्र उठेगा
             let idx = document.getElementById('chakraSelector').value;
             let currentChakra = specificChakraObj || (chakrasArray[idx] ? chakrasArray[idx] : null);
             
@@ -316,11 +332,13 @@
                 ctx.save();
                 ctx.translate(cx, cy);
                 
-                // चक्र का कुल रोटेशन = प्लॉट डिग्री + इस चक्र का अपना मैन्युअल रोटेशन
-                let totalRotation = (-degree + currentChakra.rot) * Math.PI / 180;
+                let totalRotation = (degree + currentChakra.rot) * Math.PI / 180;
                 ctx.rotate(totalRotation);
-                let chakraSize = Math.max(W * scale, L * scale) * 1.2; 
+                
+                let chkS = currentChakra.scale || 1;
+                let chakraSize = Math.max(W * scale, L * scale) * 1.2 * chkS; 
                 ctx.drawImage(currentChakra.img, -chakraSize/2, -chakraSize/2, chakraSize, chakraSize);
+                
                 ctx.restore();
             }
 
@@ -330,7 +348,7 @@
 
             ctx.save();
             ctx.translate(cx, cy);
-            ctx.rotate((-degree * Math.PI) / 180); 
+            ctx.rotate((degree * Math.PI) / 180); 
             ctx.beginPath(); ctx.moveTo(0, 0); ctx.lineTo(0, -90); 
             ctx.strokeStyle = "red"; ctx.lineWidth = 3; ctx.stroke();
             
@@ -368,32 +386,38 @@
                 const x = (pageWidth - imgWidth) / 2;
                 const y = (pageHeight - imgHeight) / 2;
 
-                // हर चक्र के लिए लूप
                 for (let i = 0; i < chakrasArray.length; i++) {
-                    drawPlot(chakrasArray[i]); // PDF के लिए हर चक्र ड्रॉ करना
+                    drawPlot(chakrasArray[i]); 
                     let imgData = canvas.toDataURL('image/png', 1.0);
                     
                     if (i > 0) doc.addPage();
                     doc.addImage(imgData, 'PNG', x, y, imgWidth, imgHeight);
                 }
 
-                const pdfBlob = doc.output('blob');
-                const file = new File([pdfBlob], "Vastu_Report.pdf", { type: "application/pdf" });
+                // Capacitor App Environment Check
+                if (window.Capacitor && Capacitor.Plugins.Filesystem) {
+                    let pdfBase64 = doc.output('datauristring');
+                    let base64Data = pdfBase64.split(',')[1];
+                    let fileName = "Vastu_Report_" + new Date().getTime() + ".pdf";
 
-                if (navigator.canShare && navigator.canShare({ files: [file] })) {
-                    await navigator.share({
-                        title: 'Vastu Chakra Report',
-                        text: 'यहाँ आपकी वास्तु रिपोर्ट है।',
-                        files: [file]
+                    await Capacitor.Plugins.Filesystem.writeFile({
+                        path: fileName,
+                        data: base64Data,
+                        directory: Capacitor.Plugins.FilesystemDirectory.Documents, 
+                        // Documents Directory usually saves in Download or Documents folder in Android
                     });
+                    
+                    alert("PDF सफलतापूर्वक डाउनलोड हो गई है! (File Manager me check karein)");
+
                 } else {
+                    // Browser Fallback (if not compiled as APK)
                     doc.save("Vastu_Report.pdf");
                 }
             } catch (error) {
                 alert("कुछ तकनीकी समस्या आई: " + error.message);
             }
 
-            btn.innerText = "HD PDF बनाएं (Share/Save)";
+            btn.innerText = "HD PDF बनाएं (Downloads में)";
             btn.style.backgroundColor = "#17a2b8";
             drawPlot(); 
         }
