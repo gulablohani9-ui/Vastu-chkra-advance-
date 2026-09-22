@@ -1,0 +1,139 @@
+<!DOCTYPE html>
+<html lang="hi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Vastu Chakra App</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background-color: #f4f4f9;
+            padding: 15px;
+            text-align: center;
+        }
+        .card {
+            background: white;
+            padding: 15px;
+            border-radius: 10px;
+            box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+            margin-bottom: 15px;
+        }
+        input, button {
+            width: 90%;
+            padding: 12px;
+            margin: 8px 0;
+            border-radius: 5px;
+            border: 1px solid #ccc;
+            font-size: 16px;
+        }
+        button {
+            background-color: #007bff;
+            color: white;
+            border: none;
+            font-weight: bold;
+        }
+        .btn-green { background-color: #28a745; }
+        canvas {
+            border: 2px solid #333;
+            background-color: white;
+            max-width: 100%;
+            border-radius: 5px;
+            margin-top: 10px;
+        }
+    </style>
+</head>
+<body>
+
+    <h2>Vastu Chakra App</h2>
+
+    <!-- Option 1: Gallery Upload -->
+    <div class="card">
+        <h3>1. गैलरी से प्लॉट डालें</h3>
+        <p style="font-size: 12px; color: gray;">(अगर आपके पास पहले से नक्शा है)</p>
+        <input type="file" id="galleryUpload" accept="image/*">
+    </div>
+
+    <!-- Option 2: Manual Size -->
+    <div class="card">
+        <h3>या प्लॉट का साइज़ डालें</h3>
+        <input type="number" id="plotLength" placeholder="लंबाई (Length)">
+        <input type="number" id="plotWidth" placeholder="चौड़ाई (Width)">
+    </div>
+
+    <!-- Compass Degree -->
+    <div class="card">
+        <h3>2. दिशा (Degree)</h3>
+        <input type="number" id="degree" placeholder="डिग्री डालें (उदा. 90)">
+        <button onclick="getAutoDegree()" style="background-color: #ff9800;">Auto Degree लें (Sensor)</button>
+    </div>
+
+    <!-- Draw Button -->
+    <button class="btn-green" onclick="drawApp()">प्लॉट और चक्र दिखाएं</button>
+
+    <!-- Canvas (Where everything is drawn) -->
+    <div class="card">
+        <canvas id="appCanvas" width="400" height="400"></canvas>
+    </div>
+
+    <script>
+        let canvas = document.getElementById('appCanvas');
+        let ctx = canvas.getContext('2d');
+        let uploadedImage = null;
+
+        // गैलरी से फोटो अपलोड करने का लॉजिक
+        document.getElementById('galleryUpload').addEventListener('change', function(e){
+            let reader = new FileReader();
+            reader.onload = function(event){
+                let img = new Image();
+                img.onload = function(){
+                    uploadedImage = img;
+                    drawApp(); // फोटो लोड होते ही स्क्रीन पर दिखाएगा
+                }
+                img.src = event.target.result;
+            }
+            reader.readAsDataURL(e.target.files[0]);
+        });
+
+        // कंपास (सेंसर) से ऑटोमैटिक डिग्री लेने का लॉजिक
+        function getAutoDegree() {
+            if (window.DeviceOrientationEvent) {
+                window.addEventListener('deviceorientation', function(event) {
+                    let alpha = event.alpha;
+                    if(alpha !== null) {
+                        // मोबाइल की दिशा को डिग्री में बदलना
+                        document.getElementById('degree').value = Math.round(360 - alpha);
+                    }
+                }, {once: true});
+                alert("फोन को सीधा प्लॉट की तरफ करें।");
+            } else {
+                alert("आपके फोन में कंपास सेंसर सपोर्ट नहीं कर रहा है।");
+            }
+        }
+
+        // प्लॉट और चक्र को स्क्रीन पर बनाने का लॉजिक
+        function drawApp() {
+            // पुरानी ड्राइंग साफ़ करें
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            
+            // अगर फोटो अपलोड की है, तो फोटो दिखाएं
+            if(uploadedImage) {
+                ctx.drawImage(uploadedImage, 0, 0, canvas.width, canvas.height);
+            } else {
+                // अगर फोटो नहीं है, तो लंबाई-चौड़ाई के हिसाब से बॉक्स बनाएं
+                let l = document.getElementById('plotLength').value || 300;
+                let w = document.getElementById('plotWidth').value || 300;
+                ctx.fillStyle = "#e0e0e0";
+                ctx.fillRect(50, 50, w, l);
+                ctx.strokeRect(50, 50, w, l);
+            }
+
+            // सेंटर पॉइंट और डिग्री दिखाना (अभी बेसिक टेक्स्ट, बाद में यहाँ असली चक्र की इमेज आएगी)
+            let deg = document.getElementById('degree').value || 0;
+            ctx.fillStyle = "red";
+            ctx.font = "16px Arial";
+            ctx.fillText("Center Point", 150, 180);
+            ctx.fillText("Degree: " + deg + "°", 150, 200);
+        }
+    </script>
+</body>
+</html>
