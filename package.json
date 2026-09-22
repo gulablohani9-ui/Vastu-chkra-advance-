@@ -1,0 +1,13 @@
+{
+  "name": "vastu-app",
+  "version": "1.0.0",
+  "description": "Vastu Chakra Calculator",
+  "dependencies": {
+    "@capacitor/android": "latest",
+    "@capacitor/core": "latest",
+    "@capacitor/cli": "latest"
+  },
+  "scripts": {
+    "build": "echo 'No build step required for plain HTML'"
+  }
+}
