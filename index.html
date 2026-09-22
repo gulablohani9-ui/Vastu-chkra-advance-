@@ -4,7 +4,6 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Vastu Chakra App Advance</title>
-    <!-- PDF बनाने के लिए jsPDF लाइब्रेरी -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
     <style>
         body { font-family: Arial, sans-serif; background-color: #f4f4f9; padding: 15px; text-align: center; }
@@ -23,16 +22,24 @@
 
     <h2>Vastu Chakra App</h2>
 
-    <!-- Option: Plot Size -->
+    <!-- Option 1: Plot Image from Gallery -->
     <div class="card">
-        <h3>1. प्लॉट का साइज़ (फीट में)</h3>
-        <input type="number" id="plotWidth" placeholder="चौड़ाई X (उदा. 20)">
-        <input type="number" id="plotLength" placeholder="लंबाई Y (उदा. 22)">
+        <h3>1. प्लॉट की फोटो डालें (गैलरी से)</h3>
+        <p style="font-size: 12px; color: gray;">(यह फोटो आपके डाले गए साइज़ के अनुसार सेट हो जाएगी)</p>
+        <input type="file" id="galleryUpload" accept="image/*">
+        <button class="btn-red" onclick="removeGalleryImage()" style="width: auto; padding: 8px 15px; font-size: 14px; margin-top: 5px;">फोटो हटाएं</button>
     </div>
 
-    <!-- Option: Special Cuts -->
+    <!-- Option 2: Plot Size -->
     <div class="card">
-        <h3>2. स्पेशल कट्स (कटे हुए कोने)</h3>
+        <h3>2. प्लॉट का साइज़ (फीट में)</h3>
+        <input type="number" id="plotWidth" placeholder="चौड़ाई X (उदा. 20)" oninput="drawPlot()">
+        <input type="number" id="plotLength" placeholder="लंबाई Y (उदा. 22)" oninput="drawPlot()">
+    </div>
+
+    <!-- Option 3: Special Cuts -->
+    <div class="card">
+        <h3>3. स्पेशल कट्स (कटे हुए कोने)</h3>
         <select id="cutCorner">
             <option value="NW">North-West (वायव्य) कट</option>
             <option value="NE">North-East (ईशान) कट</option>
@@ -47,16 +54,16 @@
         <div id="cutList"></div>
     </div>
 
-    <!-- Compass Degree -->
+    <!-- Option 4: Compass Degree -->
     <div class="card">
-        <h3>3. दिशा (Degree)</h3>
+        <h3>4. दिशा (Degree)</h3>
         <input type="number" id="degree" placeholder="डिग्री डालें (उदा. 90)" oninput="drawPlot()">
         <button onclick="getAutoDegree()" style="background-color: #ff9800;">Auto Degree लें (Sensor)</button>
     </div>
 
-    <!-- Chakra Folder Upload -->
+    <!-- Option 5: Chakra Folder Upload -->
     <div class="card">
-        <h3>4. वास्तु चक्र फोल्डर चुनें</h3>
+        <h3>5. वास्तु चक्र फोल्डर चुनें</h3>
         <input type="file" id="chakraFolder" accept="image/*" multiple webkitdirectory>
         <p id="chakraCount" style="color: green; font-weight: bold;"></p>
         
@@ -66,11 +73,11 @@
     </div>
 
     <!-- Actions -->
-    <button class="btn-green" onclick="drawPlot()">प्लॉट और चक्र दिखाएं</button>
-    <button class="btn-blue" onclick="generatePDF()">HD PDF डाउनलोड करें</button>
-    <button class="btn-red" onclick="resetAll()">Reset</button>
+    <button class="btn-green" onclick="drawPlot()">प्लॉट और चक्र अपडेट करें</button>
+    <button class="btn-blue" id="pdfBtn" onclick="generatePDF()">HD PDF बनाएं (Share/Save)</button>
+    <button class="btn-red" onclick="resetAll()" style="width: 90%;">पूरी ऐप Reset करें</button>
 
-    <!-- Canvas (Resolution doubled for HD PDF) -->
+    <!-- Canvas -->
     <div class="card">
         <canvas id="appCanvas" width="700" height="800" style="width: 100%; height: auto;"></canvas>
     </div>
@@ -80,12 +87,34 @@
         let ctx = canvas.getContext('2d');
         let cutsArray = [];
         let chakrasArray = [];
+        let uploadedBgImage = null;
+
+        document.getElementById('galleryUpload').addEventListener('change', function(e) {
+            let file = e.target.files[0];
+            if (file) {
+                let reader = new FileReader();
+                reader.onload = function(event) {
+                    let img = new Image();
+                    img.onload = function() {
+                        uploadedBgImage = img;
+                        drawPlot();
+                    }
+                    img.src = event.target.result;
+                }
+                reader.readAsDataURL(file);
+            }
+        });
+
+        function removeGalleryImage() {
+            uploadedBgImage = null;
+            document.getElementById('galleryUpload').value = "";
+            drawPlot();
+        }
 
         document.getElementById('chakraFolder').addEventListener('change', function(e) {
             chakrasArray = [];
             let files = e.target.files;
             let loadedCount = 0;
-            
             for(let i = 0; i < files.length; i++) {
                 if(files[i].type.match('image.*')) {
                     let reader = new FileReader();
@@ -139,13 +168,15 @@
         function removeCut(index) { cutsArray.splice(index, 1); updateCutListUI(); drawPlot(); }
 
         function resetAll() {
-            cutsArray = []; chakrasArray = [];
+            cutsArray = []; chakrasArray = []; uploadedBgImage = null;
             updateCutListUI();
             ctx.clearRect(0, 0, canvas.width, canvas.height);
             document.getElementById('plotWidth').value = '';
             document.getElementById('plotLength').value = '';
             document.getElementById('degree').value = '';
+            document.getElementById('galleryUpload').value = '';
             document.getElementById('chakraCount').innerText = '';
+            document.getElementById('manualRotate').value = '0';
         }
 
         function getPlotPolygon(W, L, cuts) {
@@ -173,7 +204,6 @@
             return { x: Math.abs(x / f), y: Math.abs(y / f) };
         }
 
-        // drawPlot function ab specific chakra image input le sakti hai PDF ke loop ke liye
         function drawPlot(specificChakra = null) {
             ctx.clearRect(0, 0, canvas.width, canvas.height);
             
@@ -184,7 +214,6 @@
 
             if(!W || !L) { return; }
 
-            // Canvas HD hone ke karan scaling badha di gayi hai
             let scale = Math.min(600 / W, 700 / L);
             let offsetX = (canvas.width - (W * scale)) / 2;
             let offsetY = (canvas.height - (L * scale)) / 2;
@@ -197,14 +226,26 @@
                 ctx.lineTo(offsetX + polygonPts[i].x * scale, offsetY + polygonPts[i].y * scale);
             }
             ctx.closePath();
-            ctx.lineWidth = 4; ctx.strokeStyle = "#333"; ctx.fillStyle = "#f8f9fa";
-            ctx.fill(); ctx.stroke();
+
+            ctx.save();
+            ctx.clip(); 
+
+            if (uploadedBgImage) {
+                ctx.drawImage(uploadedBgImage, offsetX, offsetY, W * scale, L * scale);
+            } else {
+                ctx.fillStyle = "#f8f9fa";
+                ctx.fill();
+            }
+            ctx.restore(); 
+
+            ctx.lineWidth = 4;
+            ctx.strokeStyle = "#333";
+            ctx.stroke();
 
             let centroid = getCentroid(polygonPts);
             let cx = offsetX + centroid.x * scale;
             let cy = offsetY + centroid.y * scale;
 
-            // Image Render
             let currentChakra = specificChakra || (chakrasArray.length > 0 ? chakrasArray[0] : null);
             if(currentChakra) {
                 ctx.save();
@@ -216,7 +257,6 @@
                 ctx.restore();
             }
 
-            // Center Point aur N Arrow
             ctx.beginPath();
             ctx.arc(cx, cy, 8, 0, 2 * Math.PI);
             ctx.fillStyle = "red"; ctx.fill();
@@ -234,10 +274,9 @@
             ctx.restore();
         }
 
-        // Multi-page PDF generate karne ka function
         async function generatePDF() {
             if (!window.jspdf) {
-                alert("PDF सिस्टम लोड हो रहा है, कृपया इंटरनेट चालू रखें और 2 सेकंड रुकें।");
+                alert("PDF सिस्टम लोड हो रहा है, कृपया इंटरनेट चालू रखें।");
                 return;
             }
             if (chakrasArray.length === 0) {
@@ -245,35 +284,52 @@
                 return;
             }
 
-            const { jsPDF } = window.jspdf;
-            const doc = new jsPDF('p', 'mm', 'a4'); // A4 size page
-            const pageWidth = doc.internal.pageSize.getWidth();
-            const pageHeight = doc.internal.pageSize.getHeight();
+            let btn = document.getElementById('pdfBtn');
+            btn.innerText = "PDF बन रहा है... कृपया रुकें!";
+            btn.style.backgroundColor = "#ffc107"; // Yellow warning color
+            
+            // Allow UI to update before heavy processing
+            await new Promise(resolve => setTimeout(resolve, 500));
 
-            // A4 page par photo ko center karne ke liye dimensions
-            const imgWidth = 180; 
-            const imgHeight = (canvas.height * imgWidth) / canvas.width;
-            const x = (pageWidth - imgWidth) / 2;
-            const y = (pageHeight - imgHeight) / 2;
+            try {
+                const { jsPDF } = window.jspdf;
+                const doc = new jsPDF('p', 'mm', 'a4');
+                const pageWidth = doc.internal.pageSize.getWidth();
+                const pageHeight = doc.internal.pageSize.getHeight();
 
-            for (let i = 0; i < chakrasArray.length; i++) {
-                // Background me har ek chakra ko बारी-बारी से draw karna
-                drawPlot(chakrasArray[i]);
-                
-                // Canvas ko HD image me badalna
-                let imgData = canvas.toDataURL('image/png', 1.0);
-                
-                if (i > 0) {
-                    doc.addPage(); // Pehle page ke baad naye pages jodna
+                const imgWidth = 180; 
+                const imgHeight = (canvas.height * imgWidth) / canvas.width;
+                const x = (pageWidth - imgWidth) / 2;
+                const y = (pageHeight - imgHeight) / 2;
+
+                for (let i = 0; i < chakrasArray.length; i++) {
+                    drawPlot(chakrasArray[i]);
+                    let imgData = canvas.toDataURL('image/png', 1.0);
+                    
+                    if (i > 0) doc.addPage();
+                    doc.addImage(imgData, 'PNG', x, y, imgWidth, imgHeight);
                 }
-                
-                doc.addImage(imgData, 'PNG', x, y, imgWidth, imgHeight);
+
+                // APK format Share Logic
+                const pdfBlob = doc.output('blob');
+                const file = new File([pdfBlob], "Vastu_Report.pdf", { type: "application/pdf" });
+
+                if (navigator.canShare && navigator.canShare({ files: [file] })) {
+                    await navigator.share({
+                        title: 'Vastu Chakra Report',
+                        text: 'यहाँ आपकी वास्तु रिपोर्ट है।',
+                        files: [file]
+                    });
+                } else {
+                    // Fallback normal download
+                    doc.save("Vastu_Report.pdf");
+                }
+            } catch (error) {
+                alert("कुछ तकनीकी समस्या आई: " + error.message);
             }
 
-            // PDF Save / Download
-            doc.save("Vastu_Report.pdf");
-            
-            // Wapas pehli image par UI reset karna
+            btn.innerText = "HD PDF बनाएं (Share/Save)";
+            btn.style.backgroundColor = "#17a2b8";
             drawPlot(); 
         }
     </script>
