@@ -1,6 +1,6 @@
 {
   "appId": "com.vastu.chakraapp",
   "appName": "Vastu Chakra",
-  "webDir": ".",
+  "webDir": "www",
   "bundledWebRuntime": false
 }
