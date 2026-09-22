@@ -4,6 +4,8 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Vastu Chakra App Advance</title>
+    <!-- PDF बनाने के लिए jsPDF लाइब्रेरी -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
     <style>
         body { font-family: Arial, sans-serif; background-color: #f4f4f9; padding: 15px; text-align: center; }
         .card { background: white; padding: 15px; border-radius: 10px; box-shadow: 0 4px 8px rgba(0,0,0,0.1); margin-bottom: 15px; }
@@ -11,8 +13,10 @@
         button { background-color: #007bff; color: white; border: none; font-weight: bold; cursor: pointer; }
         .btn-green { background-color: #28a745; }
         .btn-red { background-color: #dc3545; width: 45%; margin-top: 10px;}
+        .btn-blue { background-color: #17a2b8; margin-top: 10px; padding: 15px; font-size: 18px;}
         canvas { border: 2px solid #333; background-color: white; max-width: 100%; border-radius: 5px; margin-top: 10px; }
         .cut-row { display: flex; justify-content: space-between; align-items: center; background: #eee; padding: 5px; margin-top: 5px; border-radius: 5px;}
+        input[type=range] { width: 90%; margin: 15px 0; }
     </style>
 </head>
 <body>
@@ -40,54 +44,90 @@
             <input type="number" id="cutY" placeholder="Y कट (फीट)">
         </div>
         <button type="button" onclick="addCut()" style="background-color: #6c757d;">+ कट जोड़ें</button>
-        <div id="cutList"></div> <!-- Added cuts will show here -->
+        <div id="cutList"></div>
     </div>
 
     <!-- Compass Degree -->
     <div class="card">
         <h3>3. दिशा (Degree)</h3>
-        <input type="number" id="degree" placeholder="डिग्री डालें (उदा. 90)">
+        <input type="number" id="degree" placeholder="डिग्री डालें (उदा. 90)" oninput="drawPlot()">
         <button onclick="getAutoDegree()" style="background-color: #ff9800;">Auto Degree लें (Sensor)</button>
     </div>
 
-    <!-- Draw Button -->
-    <button class="btn-green" onclick="drawPlot()">प्लॉट, सेंटर और दिशा दिखाएं</button>
-    <button class="btn-red" onclick="resetAll()">Reset (नया बनाएं)</button>
-
-    <!-- Canvas -->
+    <!-- Chakra Folder Upload -->
     <div class="card">
-        <canvas id="appCanvas" width="350" height="400"></canvas>
+        <h3>4. वास्तु चक्र फोल्डर चुनें</h3>
+        <input type="file" id="chakraFolder" accept="image/*" multiple webkitdirectory>
+        <p id="chakraCount" style="color: green; font-weight: bold;"></p>
+        
+        <label><b>चक्र को घुमाएं (Manual Rotation):</b></label>
+        <br>
+        <input type="range" id="manualRotate" min="-180" max="180" value="0" oninput="drawPlot()">
+    </div>
+
+    <!-- Actions -->
+    <button class="btn-green" onclick="drawPlot()">प्लॉट और चक्र दिखाएं</button>
+    <button class="btn-blue" onclick="generatePDF()">HD PDF डाउनलोड करें</button>
+    <button class="btn-red" onclick="resetAll()">Reset</button>
+
+    <!-- Canvas (Resolution doubled for HD PDF) -->
+    <div class="card">
+        <canvas id="appCanvas" width="700" height="800" style="width: 100%; height: auto;"></canvas>
     </div>
 
     <script>
         let canvas = document.getElementById('appCanvas');
         let ctx = canvas.getContext('2d');
         let cutsArray = [];
+        let chakrasArray = [];
 
-        // कंपास (सेंसर) से ऑटोमैटिक डिग्री लेने का लॉजिक
+        document.getElementById('chakraFolder').addEventListener('change', function(e) {
+            chakrasArray = [];
+            let files = e.target.files;
+            let loadedCount = 0;
+            
+            for(let i = 0; i < files.length; i++) {
+                if(files[i].type.match('image.*')) {
+                    let reader = new FileReader();
+                    reader.onload = function(event) {
+                        let img = new Image();
+                        img.onload = function() {
+                            chakrasArray.push(img);
+                            loadedCount++;
+                            document.getElementById('chakraCount').innerText = loadedCount + " चक्र लोड हो गए!";
+                            if(loadedCount === 1) drawPlot();
+                        }
+                        img.src = event.target.result;
+                    }
+                    reader.readAsDataURL(files[i]);
+                }
+            }
+        });
+
         function getAutoDegree() {
             if (window.DeviceOrientationEvent) {
                 window.addEventListener('deviceorientation', function(event) {
                     let alpha = event.alpha;
-                    if(alpha !== null) { document.getElementById('degree').value = Math.round(360 - alpha); }
+                    if(alpha !== null) { 
+                        document.getElementById('degree').value = Math.round(360 - alpha); 
+                        drawPlot();
+                    }
                 }, {once: true});
                 alert("फोन को प्लॉट की फेसिंग की तरफ करें।");
             } else { alert("सेंसर सपोर्ट नहीं कर रहा है।"); }
         }
 
-        // कट जोड़ने का फंक्शन
         function addCut() {
             let corner = document.getElementById('cutCorner').value;
             let cx = parseFloat(document.getElementById('cutX').value);
             let cy = parseFloat(document.getElementById('cutY').value);
             
             if(!cx || !cy) { alert("कृपया कट का नाप (X और Y) डालें!"); return; }
-            
             cutsArray.push({ corner: corner, x: cx, y: cy });
             updateCutListUI();
+            drawPlot();
         }
 
-        // स्क्रीन पर जोड़े गए कट्स की लिस्ट दिखाना
         function updateCutListUI() {
             let html = "";
             cutsArray.forEach((c, index) => {
@@ -96,126 +136,145 @@
             document.getElementById('cutList').innerHTML = html;
         }
 
-        function removeCut(index) {
-            cutsArray.splice(index, 1);
-            updateCutListUI();
-        }
+        function removeCut(index) { cutsArray.splice(index, 1); updateCutListUI(); drawPlot(); }
 
         function resetAll() {
-            cutsArray = [];
+            cutsArray = []; chakrasArray = [];
             updateCutListUI();
             ctx.clearRect(0, 0, canvas.width, canvas.height);
             document.getElementById('plotWidth').value = '';
             document.getElementById('plotLength').value = '';
             document.getElementById('degree').value = '';
+            document.getElementById('chakraCount').innerText = '';
         }
 
-        // पॉलीगॉन (प्लॉट) के पॉइंट्स बनाना
         function getPlotPolygon(W, L, cuts) {
             let pts = [];
-            
             let nw = cuts.find(c => c.corner === 'NW');
-            if(nw) { pts.push({x: 0, y: nw.y}); pts.push({x: nw.x, y: nw.y}); pts.push({x: nw.x, y: 0}); }
-            else { pts.push({x: 0, y: 0}); }
-
+            if(nw) { pts.push({x: 0, y: nw.y}); pts.push({x: nw.x, y: nw.y}); pts.push({x: nw.x, y: 0}); } else { pts.push({x: 0, y: 0}); }
             let ne = cuts.find(c => c.corner === 'NE');
-            if(ne) { pts.push({x: W - ne.x, y: 0}); pts.push({x: W - ne.x, y: ne.y}); pts.push({x: W, y: ne.y}); }
-            else { pts.push({x: W, y: 0}); }
-
+            if(ne) { pts.push({x: W - ne.x, y: 0}); pts.push({x: W - ne.x, y: ne.y}); pts.push({x: W, y: ne.y}); } else { pts.push({x: W, y: 0}); }
             let se = cuts.find(c => c.corner === 'SE');
-            if(se) { pts.push({x: W, y: L - se.y}); pts.push({x: W - se.x, y: L - se.y}); pts.push({x: W - se.x, y: L}); }
-            else { pts.push({x: W, y: L}); }
-
+            if(se) { pts.push({x: W, y: L - se.y}); pts.push({x: W - se.x, y: L - se.y}); pts.push({x: W - se.x, y: L}); } else { pts.push({x: W, y: L}); }
             let sw = cuts.find(c => c.corner === 'SW');
-            if(sw) { pts.push({x: sw.x, y: L}); pts.push({x: sw.x, y: L - sw.y}); pts.push({x: 0, y: L - sw.y}); }
-            else { pts.push({x: 0, y: L}); }
-
+            if(sw) { pts.push({x: sw.x, y: L}); pts.push({x: sw.x, y: L - sw.y}); pts.push({x: 0, y: L - sw.y}); } else { pts.push({x: 0, y: L}); }
             return pts;
         }
 
-        // सेंटर (Brahmasthan) कैलकुलेट करना
         function getCentroid(pts) {
             let twicearea = 0, x = 0, y = 0, nPts = pts.length, p1, p2, f;
             for (let i = 0, j = nPts - 1; i < nPts; j = i++) {
                 p1 = pts[i]; p2 = pts[j];
                 f = p1.x * p2.y - p2.x * p1.y;
                 twicearea += f;
-                x += (p1.x + p2.x) * f;
-                y += (p1.y + p2.y) * f;
+                x += (p1.x + p2.x) * f; y += (p1.y + p2.y) * f;
             }
             f = twicearea * 3;
             return { x: Math.abs(x / f), y: Math.abs(y / f) };
         }
 
-        // प्लॉट ड्रॉ करना
-        function drawPlot() {
+        // drawPlot function ab specific chakra image input le sakti hai PDF ke loop ke liye
+        function drawPlot(specificChakra = null) {
             ctx.clearRect(0, 0, canvas.width, canvas.height);
             
             let W = parseFloat(document.getElementById('plotWidth').value);
             let L = parseFloat(document.getElementById('plotLength').value);
             let degree = parseFloat(document.getElementById('degree').value) || 0;
+            let manualRotate = parseFloat(document.getElementById('manualRotate').value) || 0;
 
-            if(!W || !L) { alert("कृपया प्लॉट की लंबाई और चौड़ाई डालें!"); return; }
+            if(!W || !L) { return; }
 
-            // Scale to fit canvas (Canvas is 350x400, leaving 50px margin)
-            let scale = Math.min(300 / W, 350 / L);
+            // Canvas HD hone ke karan scaling badha di gayi hai
+            let scale = Math.min(600 / W, 700 / L);
             let offsetX = (canvas.width - (W * scale)) / 2;
             let offsetY = (canvas.height - (L * scale)) / 2;
 
             let polygonPts = getPlotPolygon(W, L, cutsArray);
             
-            // Draw Plot Polygon
             ctx.beginPath();
             ctx.moveTo(offsetX + polygonPts[0].x * scale, offsetY + polygonPts[0].y * scale);
             for(let i=1; i<polygonPts.length; i++) {
                 ctx.lineTo(offsetX + polygonPts[i].x * scale, offsetY + polygonPts[i].y * scale);
             }
             ctx.closePath();
-            ctx.lineWidth = 3;
-            ctx.strokeStyle = "#333";
-            ctx.fillStyle = "#e9ecef";
-            ctx.fill();
-            ctx.stroke();
+            ctx.lineWidth = 4; ctx.strokeStyle = "#333"; ctx.fillStyle = "#f8f9fa";
+            ctx.fill(); ctx.stroke();
 
-            // Find Center
             let centroid = getCentroid(polygonPts);
             let cx = offsetX + centroid.x * scale;
             let cy = offsetY + centroid.y * scale;
 
-            // Draw Center Dot
-            ctx.beginPath();
-            ctx.arc(cx, cy, 5, 0, 2 * Math.PI);
-            ctx.fillStyle = "red";
-            ctx.fill();
+            // Image Render
+            let currentChakra = specificChakra || (chakrasArray.length > 0 ? chakrasArray[0] : null);
+            if(currentChakra) {
+                ctx.save();
+                ctx.translate(cx, cy);
+                let totalRotation = (-degree + manualRotate) * Math.PI / 180;
+                ctx.rotate(totalRotation);
+                let chakraSize = Math.max(W * scale, L * scale) * 1.2; 
+                ctx.drawImage(currentChakra, -chakraSize/2, -chakraSize/2, chakraSize, chakraSize);
+                ctx.restore();
+            }
 
-            // Draw North Arrow based on Degree
+            // Center Point aur N Arrow
+            ctx.beginPath();
+            ctx.arc(cx, cy, 8, 0, 2 * Math.PI);
+            ctx.fillStyle = "red"; ctx.fill();
+
             ctx.save();
             ctx.translate(cx, cy);
-            // 0 degree default points Up (North). If user puts degree, we rotate arrow by minus degree to show North
             ctx.rotate((-degree * Math.PI) / 180); 
+            ctx.beginPath(); ctx.moveTo(0, 0); ctx.lineTo(0, -90); 
+            ctx.strokeStyle = "red"; ctx.lineWidth = 3; ctx.stroke();
             
-            ctx.beginPath();
-            ctx.moveTo(0, 0);
-            ctx.lineTo(0, -50); // Arrow line
-            ctx.strokeStyle = "red";
-            ctx.lineWidth = 2;
-            ctx.stroke();
+            ctx.beginPath(); ctx.moveTo(0, -100); ctx.lineTo(-10, -80); ctx.lineTo(10, -80);
+            ctx.fillStyle = "red"; ctx.fill();
             
-            // Arrow head
-            ctx.beginPath();
-            ctx.moveTo(0, -55);
-            ctx.lineTo(-5, -45);
-            ctx.lineTo(5, -45);
-            ctx.fillStyle = "red";
-            ctx.fill();
-            
-            ctx.font = "14px Arial";
-            ctx.fillText("N", -5, -60);
+            ctx.font = "24px Arial"; ctx.fillText("N", -8, -110);
             ctx.restore();
+        }
 
-            // Text
-            ctx.fillStyle = "black";
-            ctx.fillText("Center", cx + 10, cy + 15);
+        // Multi-page PDF generate karne ka function
+        async function generatePDF() {
+            if (!window.jspdf) {
+                alert("PDF सिस्टम लोड हो रहा है, कृपया इंटरनेट चालू रखें और 2 सेकंड रुकें।");
+                return;
+            }
+            if (chakrasArray.length === 0) {
+                alert("कृपया पहले वास्तु चक्र फोल्डर अपलोड करें ताकि PDF में इमेजेज आ सकें!");
+                return;
+            }
+
+            const { jsPDF } = window.jspdf;
+            const doc = new jsPDF('p', 'mm', 'a4'); // A4 size page
+            const pageWidth = doc.internal.pageSize.getWidth();
+            const pageHeight = doc.internal.pageSize.getHeight();
+
+            // A4 page par photo ko center karne ke liye dimensions
+            const imgWidth = 180; 
+            const imgHeight = (canvas.height * imgWidth) / canvas.width;
+            const x = (pageWidth - imgWidth) / 2;
+            const y = (pageHeight - imgHeight) / 2;
+
+            for (let i = 0; i < chakrasArray.length; i++) {
+                // Background me har ek chakra ko बारी-बारी से draw karna
+                drawPlot(chakrasArray[i]);
+                
+                // Canvas ko HD image me badalna
+                let imgData = canvas.toDataURL('image/png', 1.0);
+                
+                if (i > 0) {
+                    doc.addPage(); // Pehle page ke baad naye pages jodna
+                }
+                
+                doc.addImage(imgData, 'PNG', x, y, imgWidth, imgHeight);
+            }
+
+            // PDF Save / Download
+            doc.save("Vastu_Report.pdf");
+            
+            // Wapas pehli image par UI reset karna
+            drawPlot(); 
         }
     </script>
 </body>
